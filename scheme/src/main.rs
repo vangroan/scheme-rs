@@ -21,10 +21,10 @@ fn run_file(file_path: &str) {
             let expr =
                 scheme_engine::parse(script.as_str(), true).expect("failed to parse program");
 
-            let closure =
+            let program =
                 scheme_engine::compile(env.clone(), &expr).expect("failed to compile program");
 
-            let _value0 = scheme_engine::eval(closure).expect("runtime error");
+            let _value0 = scheme_engine::eval(program.closure().clone()).expect("runtime error");
         }
         Err(err) => {
             eprintln!("failed to open file: {err}");
@@ -52,16 +52,21 @@ fn run_repl() {
                 println!("parse:\n\t{:#?}", expr);
 
                 match scheme_engine::compile(env.clone(), &expr) {
-                    Ok(closure) => {
+                    Ok(program) => {
                         println!("bytecode:");
-                        for (index, op) in
-                            closure.borrow().procedure().bytecode().iter().enumerate()
+                        for (index, op) in program
+                            .closure()
+                            .borrow()
+                            .procedure()
+                            .bytecode()
+                            .iter()
+                            .enumerate()
                         {
                             println!("  {index:>6} : {op:?}");
                         }
 
                         // Run closure in VM
-                        match scheme_engine::eval(closure) {
+                        match scheme_engine::eval(program.closure().clone()) {
                             Ok(Expr::Void) => {
                                 // Don't print a #!void, it's the "nothing" value
                             }

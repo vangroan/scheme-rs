@@ -6,8 +6,8 @@ use scheme_engine::{error::Error, Closure, Env, Expr, Handle};
 fn compile_closure_env(source: &str) -> Result<(Handle<Env>, Handle<Closure>), Error> {
     let env = scheme_engine::new_env()?;
     let expr = scheme_engine::parse(source, true)?;
-    let closure = scheme_engine::compile(env.clone(), &expr)?;
-    Ok((env, closure))
+    let program = scheme_engine::compile(env.clone(), &expr)?;
+    Ok((env, program.closure().clone()))
 }
 
 #[test]

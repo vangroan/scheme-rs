@@ -39,33 +39,33 @@ impl Pair {
         (&self.0, &self.1)
     }
 
-    pub const fn head(&self) -> &Expr {
+    pub const fn left(&self) -> &Expr {
         &self.0
     }
 
-    pub const fn rest(&self) -> &Expr {
+    pub const fn right(&self) -> &Expr {
         &self.1
     }
 
-    pub fn set_head(&mut self, value: Expr) {
+    #[inline(always)]
+    pub fn set_left(&mut self, value: Expr) {
         self.0 = value;
     }
 
-    pub fn set_tail(&mut self, value: Expr) {
+    #[inline(always)]
+    pub fn set_right(&mut self, value: Expr) {
         self.1 = value;
     }
 
+    /// Copy the contents of the given slice into a new correctly formed list.
     pub fn new_list(elements: &[Expr]) -> Option<Pair> {
-        match elements.split_first() {
-            Some((first, rest)) => {
-                let head = first.clone();
-                let tail: Expr = Pair::new_list(rest)
-                    .map(|pair| Expr::Pair(Handle::new(pair)))
-                    .unwrap_or(Expr::Nil);
-                Some(Pair(head, tail))
-            }
-            None => None,
-        }
+        elements.split_first().map(|(first, rest)| {
+            let head = first.clone();
+            let tail: Expr = Pair::new_list(rest)
+                .map(|pair| Expr::Pair(Handle::new(pair)))
+                .unwrap_or(Expr::Nil);
+            Pair(head, tail)
+        })
     }
 
     /// Create a new well-formed list by taking ownership of the given elements.
@@ -79,22 +79,26 @@ impl Pair {
         maybe_head: Option<Expr>,
         mut rest_reversed: Vec<Expr>,
     ) -> Option<Pair> {
-        match maybe_head {
-            Some(head) => Some(Pair(
+        maybe_head.map(|head| {
+            Pair(
                 head,
                 Pair::new_list_vec_recursive(rest_reversed.pop(), rest_reversed)
                     .map(Pair::to_expr)
                     .unwrap_or(Expr::Nil),
-            )),
-            None => None,
-        }
+            )
+        })
     }
 
+    /// Recursively checks if the pair is a valid list.
+    ///
+    /// # Warning
+    ///
+    /// This does not protect against circular references.
     pub(crate) fn is_list(expr: &Expr) -> bool {
         match expr {
             Expr::Pair(pair_handle) => {
                 let pair = pair_handle.borrow();
-                let rest = pair.rest();
+                let rest = pair.right();
                 match rest {
                     Expr::Nil => true,
                     _ => Pair::is_list(rest),
@@ -116,13 +120,18 @@ pub enum Expr {
     /// ```scheme
     /// '()
     /// ```
+    ///
+    /// Nil also represents an empty list. Any code that expects a [`Pair`]
+    /// must be prepared to accept a [`Nil`] as well. Nil is used as the
+    /// sentinel of the [`Pair`] linked list, and is required for a chain
+    /// of pairs to be considered a well-formed list.
     Nil,
-    /// Returned by special forms or procedures that only have side-effects,
+    /// Returned by special forms or procedures that only have side effects,
     /// but don't evaluate to values.
     ///
     /// Examples are `define`, `display` and `newline`.
     ///
-    /// Also the value of a variable that was declared, but never defined.
+    /// Also, the value of a variable that was declared, but never defined.
     Void,
     Bool(bool),
     Number(f64),
@@ -131,17 +140,23 @@ pub enum Expr {
     Keyword(Keyword),
     Quote(Box<Expr>),
     // TODO: List must be a linked list
+    #[deprecated]
     List(Vec<Expr>),
     // TODO: Handle of tuples, or tuple of handles?
     Pair(Handle<Pair>),
     Vector(Vec<Expr>),
     Sequence(Vec<Expr>),
+    SequenceV2(Handle<Pair>),
     Procedure(Rc<Proc>),
     Closure(Handle<Closure>),
     NativeFunc(NativeFunc),
 }
 
 impl Expr {
+    pub fn is_nil(&self) -> bool {
+        matches!(self, Expr::Nil)
+    }
+
     pub fn is_boolean(&self) -> bool {
         matches!(self, Expr::Bool(_))
     }
@@ -165,11 +180,20 @@ impl Expr {
         }
     }
 
+    pub fn new_ident(ident: impl AsRef<str>) -> Expr {
+        Expr::Ident(SmolStr::new(ident))
+    }
+
     pub fn as_ident(&self) -> Option<&str> {
         match self {
             Expr::Ident(name) => Some(name.as_str()),
             _ => None,
         }
+    }
+
+    #[inline(always)]
+    pub fn new_pair(left: Expr, right: Expr) -> Expr {
+        Expr::Pair(Handle::new(Pair(left, right)))
     }
 
     pub fn as_pair(&self) -> Ref<Pair> {
@@ -179,11 +203,23 @@ impl Expr {
         }
     }
 
+    pub fn into_pair(self) -> Pair {
+        match self {
+            Expr::Pair(pair_handle) => pair_handle.into_inner(),
+            _ => panic!("expression is not a pair"),
+        }
+    }
+
     pub fn try_pair(&self) -> Option<Ref<Pair>> {
         match self {
             Expr::Pair(pair_handle) => Some(pair_handle.borrow()),
             _ => None,
         }
+    }
+
+    #[inline]
+    pub fn is_pair(&self) -> bool {
+        matches!(self, Expr::Pair(_))
     }
 
     pub fn as_sequence(&self) -> Option<&[Expr]> {
@@ -297,6 +333,8 @@ impl Signature {
 }
 
 impl Proc {
+    // TODO: The procedure definition must keep a weak reference to its lexical environment.
+
     /// Bytecode instructions for this procedure.
     #[inline]
     pub fn bytecode(&self) -> &[Op] {
@@ -368,9 +406,4 @@ impl UpValue {
         // TODO: Must we stop closing a closed up-value?
         *self = UpValue::Closed(value);
     }
-}
-
-/// Extensions for the *cons* type. See [`Pair`] and [`Expr::Pair`].
-pub trait PairExt {
-    fn split_first(&self) -> Option<(Expr, Expr)>;
 }

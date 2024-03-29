@@ -19,13 +19,21 @@ impl<T> Handle<T> {
         }
     }
 
+    pub fn into_inner(self) -> T {
+        let Self { rc } = self;
+        match Rc::try_unwrap(rc) {
+            Err(_) => panic!("handle is not unique"),
+            Ok(ref_cell) => ref_cell.into_inner(),
+        }
+    }
+
     #[inline(always)]
     pub fn borrow(&self) -> Ref<'_, T> {
         self.rc.borrow()
     }
 
     #[inline(always)]
-    pub fn borrow_mut(&mut self) -> RefMut<'_, T> {
+    pub fn borrow_mut(&self) -> RefMut<'_, T> {
         self.rc.borrow_mut()
     }
 
