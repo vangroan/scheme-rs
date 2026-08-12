@@ -13,6 +13,7 @@ mod parser;
 mod span;
 mod symbol;
 mod token;
+mod value;
 mod vm;
 
 pub use self::compiler::compile;
