@@ -198,4 +198,80 @@ mod test {
         assert_eq!(size_of::<ValuePtr>(), size_of::<usize>());
         assert_eq!(size_of::<ValuePtr>(), size_of::<*mut u8>());
     }
+
+    #[test]
+    fn test_nil() {
+        let v = ValuePtr::nil();
+        assert!(v.is_nil());
+        assert!(!v.is_int());
+        assert!(!v.is_bool());
+        assert!(!v.is_void());
+        assert!(!v.is_ptr());
+    }
+
+    #[test]
+    fn test_int_roundtrip() {
+        for n in [0, 1, -1, 42, -42, ValuePtr::MAX_INT, ValuePtr::MIN_INT] {
+            let v = ValuePtr::from_int(n);
+            assert!(v.is_int(), "is_int failed for {n}");
+            assert_eq!(v.to_int(), n, "to_int failed for {n}");
+        }
+    }
+
+    #[test]
+    fn test_int_not_other_types() {
+        // Use 1 to exercise a value with bit 1 set in the encoded form.
+        let v = ValuePtr::from_int(1);
+        assert!(!v.is_nil());
+        assert!(!v.is_bool());
+        assert!(!v.is_void());
+        assert!(!v.is_ptr());
+    }
+
+    #[test]
+    fn test_bool_true() {
+        let v = ValuePtr::from_bool(true);
+        assert!(v.is_bool());
+        assert!(v.to_bool());
+        assert!(!v.is_nil());
+        assert!(!v.is_int());
+        assert!(!v.is_void());
+        assert!(!v.is_ptr());
+    }
+
+    #[test]
+    fn test_bool_false() {
+        let v = ValuePtr::from_bool(false);
+        assert!(v.is_bool());
+        assert!(!v.to_bool());
+        assert!(!v.is_nil());
+        assert!(!v.is_int());
+        assert!(!v.is_void());
+        assert!(!v.is_ptr());
+    }
+
+    #[test]
+    fn test_void() {
+        let v = ValuePtr::void();
+        assert!(v.is_void());
+        assert!(!v.is_nil());
+        assert!(!v.is_int());
+        assert!(!v.is_bool());
+        assert!(!v.is_ptr());
+    }
+
+    #[test]
+    fn test_ptr() {
+        let raw = Box::into_raw(Box::new(42u64));
+        let v = ValuePtr::from_ptr(raw);
+        assert!(v.is_ptr());
+        assert!(!v.is_nil());
+        assert!(!v.is_int());
+        assert!(!v.is_bool());
+        assert!(!v.is_void());
+        unsafe {
+            assert_eq!(*v.to_ptr::<u64>(), 42);
+            drop(Box::from_raw(raw));
+        }
+    }
 }
