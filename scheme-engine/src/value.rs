@@ -19,17 +19,19 @@
 //! This is a deliberate tradeoff: a 1-bit tag is cheaper to test and preserves
 //! a full 63-bit signed integer range (`MIN_INT`..=`MAX_INT`).
 
-#![allow(dead_code)] // Work-in-progress
-
 use std::marker::PhantomData;
+use std::ptr::NonNull;
 
 use crate::expr::Expr;
 
 /// Assert that the pointer is aligned to 8 bytes to ensure that
 /// the low 3 bits can be used for tagging.
+///
+/// Only asserts in debug builds, so it does not affect release performance.
+/// Incorrect alignment should be caught by unit tests.
 macro_rules! assert_aligned {
     ($ptr:expr) => {
-        assert_eq!(
+        debug_assert_eq!(
             ($ptr as usize) & TAG_MASK,
             0,
             "ValuePtr must be aligned to 8 bytes"
@@ -83,13 +85,17 @@ impl ValuePtr {
 
     /// Create a new [`ValuePtr`] from a raw pointer.
     ///
+    /// The pointer must be aligned to 8 bytes to allow for tagging.
+    ///
     /// # Panics
     ///
-    /// Panics if the pointer is not aligned to 8 bytes.
-    pub fn from_ptr<T>(ptr: *mut T) -> Self {
-        assert_aligned!(ptr);
+    /// Panics in debug builds if the pointer is not aligned to 8 bytes.
+    pub fn from_ptr<T>(ptr: NonNull<T>) -> Self {
+        assert_aligned!(ptr.as_ptr());
+
+        // We don't accept null pointers because the caller knows their intent better.
         Self {
-            ptr: ptr as usize,
+            ptr: ptr.as_ptr() as usize,
             _marker: PhantomData,
         }
     }
@@ -294,7 +300,8 @@ mod test {
     #[test]
     fn test_ptr() {
         let raw = Box::into_raw(Box::new(42u64));
-        let v = ValuePtr::from_ptr(raw);
+        let non_null = NonNull::new(raw).unwrap();
+        let v = ValuePtr::from_ptr(non_null);
         assert!(v.is_ptr());
         assert!(!v.is_nil());
         assert!(!v.is_int());
