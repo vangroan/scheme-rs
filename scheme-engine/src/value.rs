@@ -1,4 +1,21 @@
-//! Value pointer type.
+//! Compact dynamically-typed value representation.
+//!
+//! [`ValuePtr`] fits in a single pointer-sized word by exploiting the fact that
+//! heap allocations are always aligned to at least 8 bytes, leaving the lowest
+//! 3 bits of any valid pointer permanently zero. Those bits are used as a type
+//! tag, so a `ValuePtr` can represent several types without boxing:
+//!
+//! | `ptr & 0b111` | Type    | Payload                                  |
+//! |---------------|---------|------------------------------------------|
+//! | `0b000`       | pointer | address of heap object (`0` = nil)       |
+//! | `0b001`       | integer | `(ptr as isize) >> 1` (63-bit signed)    |
+//! | `0b010`       | bool    | `ptr >> 3` (0 = false, 1 = true)         |
+//! | `0b100`       | void    | none (the entire word is `0b100`)        |
+//! | `0b110`       | unused  | reserved for future use                  |
+//!
+//! Because integers only need bit 0 as their tag, they retain a full 63-bit
+//! signed range (`MIN_INT`..=`MAX_INT`), and the bool/void tags never overlap
+//! with a valid integer encoding.
 
 #![allow(dead_code)] // Work-in-progress
 
