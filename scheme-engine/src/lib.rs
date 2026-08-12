@@ -13,6 +13,7 @@ mod parser;
 mod span;
 mod symbol;
 mod token;
+mod value;
 mod vm;
 
 pub use self::compiler::compile;
@@ -22,6 +23,7 @@ pub use self::expr::{Closure, Expr, Proc};
 pub use self::handle::Handle;
 pub use self::parser::parse;
 pub use self::vm::{call, eval};
+pub use self::value::ValuePtr;
 
 pub mod prelude {}
 
