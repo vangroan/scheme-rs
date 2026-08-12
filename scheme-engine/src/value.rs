@@ -61,10 +61,22 @@ impl ValuePtr {
     /// The minimum integer value that can be stored in a [`ValuePtr`].
     pub const MIN_INT: isize = isize::MIN >> 1;
 
+    // -------------------------------------------------------------------------
+    // Constructors
+    // -------------------------------------------------------------------------
+
     /// Create a new [`ValuePtr`] representing the `nil` value.
     pub fn nil() -> Self {
         Self {
             ptr: 0,
+            _marker: PhantomData,
+        }
+    }
+
+    /// Create a new [`ValuePtr`] representing the void/unspecified value.
+    pub fn void() -> Self {
+        Self {
+            ptr: TAG_VOID,
             _marker: PhantomData,
         }
     }
@@ -104,26 +116,27 @@ impl ValuePtr {
         }
     }
 
+    /// Create a new [`ValuePtr`] from a boolean value.
+    pub fn from_bool(value: bool) -> Self {
+        Self {
+            ptr: (value as usize) << 3 | TAG_BOOL,
+            _marker: PhantomData,
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Tag Checks
+    // -------------------------------------------------------------------------
+
     /// Check whether the [`ValuePtr`] is a null pointer.
     pub fn is_nil(&self) -> bool {
         // Null pointers always have address 0: https://doc.rust-lang.org/std/ptr/fn.null.html
         self.ptr == 0
     }
 
-    /// Check whether the [`ValuePtr`] is an integer value.
-    pub fn is_int(&self) -> bool {
-        // Only bit 0 is the tag; bits 1+ carry the integer value.
-        (self.ptr & TAG_INT) != 0
-    }
-
-    /// Extract the integer value from a [`ValuePtr`].
-    ///
-    /// # Panics
-    ///
-    /// Panics if the [`ValuePtr`] is not an integer.
-    pub fn to_int(&self) -> isize {
-        assert!(self.is_int(), "ValuePtr is not an integer");
-        (self.ptr as isize) >> 1
+    /// Check whether the [`ValuePtr`] is the void/unspecified value.
+    pub fn is_void(&self) -> bool {
+        self.ptr == TAG_VOID
     }
 
     /// Check whether the [`ValuePtr`] is tagged as a pointer to a
@@ -136,17 +149,29 @@ impl ValuePtr {
         (self.ptr & TAG_MASK) == 0 && !self.is_nil()
     }
 
-    /// Create a new [`ValuePtr`] from a boolean value.
-    pub fn from_bool(value: bool) -> Self {
-        Self {
-            ptr: (value as usize) << 3 | TAG_BOOL,
-            _marker: PhantomData,
-        }
+    /// Check whether the [`ValuePtr`] is an integer value.
+    pub fn is_int(&self) -> bool {
+        // Only bit 0 is the tag; bits 1+ carry the integer value.
+        (self.ptr & TAG_INT) != 0
     }
 
     /// Check whether the [`ValuePtr`] is a boolean value.
     pub fn is_bool(&self) -> bool {
         (self.ptr & TAG_MASK) == TAG_BOOL
+    }
+
+    // -------------------------------------------------------------------------
+    // Extract Values
+    // -------------------------------------------------------------------------
+
+    /// Extract the integer value from a [`ValuePtr`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if the [`ValuePtr`] is not an integer.
+    pub fn to_int(&self) -> isize {
+        assert!(self.is_int(), "ValuePtr is not an integer");
+        (self.ptr as isize) >> 1
     }
 
     /// Extract the boolean value from a [`ValuePtr`].
@@ -157,28 +182,6 @@ impl ValuePtr {
     pub fn to_bool(&self) -> bool {
         assert!(self.is_bool(), "ValuePtr is not a boolean");
         (self.ptr >> 3) != 0
-    }
-
-    /// Create a new [`ValuePtr`] representing the void/unspecified value.
-    pub fn void() -> Self {
-        Self {
-            ptr: TAG_VOID,
-            _marker: PhantomData,
-        }
-    }
-
-    /// Check whether the [`ValuePtr`] is the void/unspecified value.
-    pub fn is_void(&self) -> bool {
-        self.ptr == TAG_VOID
-    }
-
-    /// Materialize the [`ValuePtr`] into an [`Expr`].
-    ///
-    /// This increases the byte size of the value, but allows for easier
-    /// type-safe manipulation of the value.
-    pub fn to_expr(&self) -> Expr {
-        // Note: Do we need reference counting on pointers to objects?
-        todo!("Implement conversion from ValuePtr to Expr");
     }
 
     /// Cast the [`ValuePtr`] to a raw pointer of type `T`.
@@ -196,6 +199,15 @@ impl ValuePtr {
     pub unsafe fn to_ptr<T>(&self) -> *mut T {
         assert!(self.is_ptr(), "ValuePtr is not a pointer");
         self.ptr as *mut T
+    }
+
+    /// Materialize the [`ValuePtr`] into an [`Expr`].
+    ///
+    /// This increases the byte size of the value, but allows for easier
+    /// type-safe manipulation of the value.
+    pub fn to_expr(&self) -> Expr {
+        // Note: Do we need reference counting on pointers to objects?
+        todo!("Implement conversion from ValuePtr to Expr");
     }
 }
 
