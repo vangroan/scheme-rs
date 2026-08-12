@@ -20,6 +20,8 @@ macro_rules! assert_aligned {
 
 const TAG_MASK: usize = 0b111;
 const TAG_INT: usize = 0b001;
+const TAG_BOOL: usize = 0b010;
+const TAG_VOID: usize = 0b100;
 
 /// Dynamically typed value.
 ///
@@ -91,7 +93,8 @@ impl ValuePtr {
 
     /// Check whether the [`ValuePtr`] is an integer value.
     pub fn is_int(&self) -> bool {
-        (self.ptr & TAG_MASK) == TAG_INT
+        // Only bit 0 is the tag; bits 1+ carry the integer value.
+        (self.ptr & TAG_INT) != 0
     }
 
     /// Extract the integer value from a [`ValuePtr`].
@@ -112,6 +115,42 @@ impl ValuePtr {
     /// pointer and a valid pointer, to prevent accidental null dereference.
     pub fn is_ptr(&self) -> bool {
         (self.ptr & TAG_MASK) == 0 && !self.is_nil()
+    }
+
+    /// Create a new [`ValuePtr`] from a boolean value.
+    pub fn from_bool(value: bool) -> Self {
+        Self {
+            ptr: (value as usize) << 3 | TAG_BOOL,
+            _marker: PhantomData,
+        }
+    }
+
+    /// Check whether the [`ValuePtr`] is a boolean value.
+    pub fn is_bool(&self) -> bool {
+        (self.ptr & TAG_MASK) == TAG_BOOL
+    }
+
+    /// Extract the boolean value from a [`ValuePtr`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if the [`ValuePtr`] is not a boolean.
+    pub fn to_bool(&self) -> bool {
+        assert!(self.is_bool(), "ValuePtr is not a boolean");
+        (self.ptr >> 3) != 0
+    }
+
+    /// Create a new [`ValuePtr`] representing the void/unspecified value.
+    pub fn void() -> Self {
+        Self {
+            ptr: TAG_VOID,
+            _marker: PhantomData,
+        }
+    }
+
+    /// Check whether the [`ValuePtr`] is the void/unspecified value.
+    pub fn is_void(&self) -> bool {
+        self.ptr == TAG_VOID
     }
 
     /// Materialize the [`ValuePtr`] into an [`Expr`].
