@@ -13,9 +13,11 @@
 //! | `0b100`       | void    | none (the entire word is `0b100`)        |
 //! | `0b110`       | unused  | reserved for future use                  |
 //!
-//! Because integers only need bit 0 as their tag, they retain a full 63-bit
-//! signed range (`MIN_INT`..=`MAX_INT`), and the bool/void tags never overlap
-//! with a valid integer encoding.
+//! Because integers use only bit 0 as their tag, any tag with bit 0 set
+//! (`0b011`, `0b101`, `0b111`) is permanently reserved — the integer check
+//! tests only bit 0, so those values would always be misidentified as integers.
+//! This is a deliberate tradeoff: a 1-bit tag is cheaper to test and preserves
+//! a full 63-bit signed integer range (`MIN_INT`..=`MAX_INT`).
 
 #![allow(dead_code)] // Work-in-progress
 
