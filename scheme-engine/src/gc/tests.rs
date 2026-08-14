@@ -1,9 +1,7 @@
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 
-use crate::gc::Trace;
-use std::cell::RefCell;
-
-use super::{Gc, GcHeap};
+use crate::gc::heap::GcBox;
+use crate::gc::{Gc, GcHeap, Trace};
 
 #[test]
 fn test_gc_heap_alloc() {
@@ -40,6 +38,32 @@ fn test_gc_heap_collect() {
 
     assert_eq!(heap.stats().allocated_objects, 0);
     assert_eq!(heap.stats().allocated_bytes, 0);
+}
+
+#[test]
+fn test_gc_heap_increase_threshold() {
+    let mut heap = GcHeap::new();
+
+    // Set a small threshold to trigger collection without allocating too much
+    let small_threshold = 18 * (std::mem::size_of::<GcBox<u32>>());
+    heap.set_collect_threshold(small_threshold);
+
+    let initial_threshold = heap.stats().threshhold_bytes;
+    assert_eq!(initial_threshold, small_threshold);
+
+    // Allocate objects to exceed the threshold, triggering collection
+    // Each allocation takes roughly 28-32 bytes (GcBox overhead + u32)
+    // So ~18-20 allocations should exceed the 500 byte threshold
+    let mut roots = Vec::new();
+    for i in 0..20 {
+        roots.push(heap.alloc(i as u32));
+    }
+
+    let new_threshold = heap.stats().threshhold_bytes;
+
+    // After collection triggered by exceeding threshold,
+    // the new threshold should be greater than the original
+    assert!(new_threshold > initial_threshold);
 }
 
 thread_local! {

@@ -71,6 +71,11 @@ impl GcHeap {
         Gc::new(ptr)
     }
 
+    #[allow(dead_code, reason = "Used in unit tests")]
+    pub(crate) fn set_collect_threshold(&mut self, threshold: usize) {
+        self.stats.threshhold_bytes = threshold;
+    }
+
     fn ensure_heap_size(&mut self, target_size: usize) {
         if target_size >= self.stats.threshhold_bytes
             || self.stats.allocated_bytes >= self.stats.threshhold_bytes
