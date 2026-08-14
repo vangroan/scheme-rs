@@ -84,6 +84,7 @@ pub(super) struct VTable {
     pub trace_fn: unsafe fn(NonNull<ErasedBox>, &mut Tracer),
     pub trace_in_heap_fn: unsafe fn(NonNull<ErasedBox>),
     pub drop_fn: unsafe fn(NonNull<ErasedBox>),
+    pub size_fn: fn() -> usize,
 }
 
 pub(super) const fn vtable_of<T>() -> &'static VTable
@@ -97,6 +98,7 @@ where
             let this: NonNull<GcBox<Self>> = this.cast();
             Trace::trace(this.as_ref().as_ref(), tracer);
         }
+
         unsafe fn trace_in_heap_fn(this: NonNull<ErasedBox>) {
             let this: NonNull<GcBox<Self>> = this.cast();
             Trace::trace_in_heap(this.as_ref().as_ref());
@@ -112,6 +114,11 @@ where
             // `T` drop called by Box
             drop(Box::from_raw(this.as_ptr()));
         }
+
+        /// Size of the downcasted type.
+        fn size() -> usize {
+            std::mem::size_of::<GcBox<Self>>()
+        }
     }
 
     impl<T: Trace + 'static> HasVTable for T {
@@ -119,6 +126,7 @@ where
             trace_fn: <T as HasVTable>::trace_fn,
             trace_in_heap_fn: <T as HasVTable>::trace_in_heap_fn,
             drop_fn: <T as HasVTable>::drop_fn,
+            size_fn: <T as HasVTable>::size,
         };
     }
 

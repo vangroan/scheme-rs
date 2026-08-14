@@ -15,9 +15,19 @@ use super::Root;
 //                                                                            //
 // ========================================================================== //
 
-#[derive(Default, Debug)]
-struct GcStats {
-    allocated: usize, // bytes
+const INITIAL_HEAP_SIZE: usize = 1024 * 1024 * 1024; // bytes
+
+/// Statistics about the garbage collector's heap.
+#[derive(Default, Debug, Clone)]
+pub struct GcStats {
+    /// The total number of bytes currently allocated in the heap.
+    pub allocated_bytes: usize,
+
+    /// The total number of objects currently allocated in the heap.
+    pub allocated_objects: usize,
+
+    /// The threshold in bytes at which the garbage collector will be triggered.
+    pub threshhold_bytes: usize,
 }
 
 pub struct GcHeap {
@@ -27,16 +37,23 @@ pub struct GcHeap {
 
 impl GcHeap {
     pub fn new() -> Self {
-        GcHeap {
-            stats: GcStats::default(),
-            head: None,
-        }
+        let stats = GcStats {
+            threshhold_bytes: INITIAL_HEAP_SIZE,
+            ..Default::default()
+        };
+        GcHeap { stats, head: None }
+    }
+
+    pub fn stats(&self) -> &GcStats {
+        &self.stats
     }
 
     pub fn alloc<T>(&mut self, data: T) -> Root<T>
     where
         T: Trace + 'static,
     {
+        self.ensure_heap_size(self.stats.allocated_bytes + std::mem::size_of::<GcBox<T>>());
+
         let boxed = Box::new(GcBox {
             header: GcHeader {
                 next: Cell::new(self.head),
@@ -47,12 +64,22 @@ impl GcHeap {
             },
             data,
         });
-        self.stats.allocated += std::mem::size_of::<GcBox<T>>();
+        self.stats.allocated_bytes += std::mem::size_of::<GcBox<T>>();
+        self.stats.allocated_objects += 1;
 
         let ptr = NonNull::new(Box::into_raw(boxed)).expect("Box::into_raw returned null");
         self.head = Some(ptr.cast());
 
         Root { ptr }
+    }
+
+    fn ensure_heap_size(&mut self, target_size: usize) {
+        if target_size >= self.stats.threshhold_bytes
+            || self.stats.allocated_bytes >= self.stats.threshhold_bytes
+        {
+            self.collect();
+            self.stats.threshhold_bytes = self.stats.allocated_bytes * 2;
+        }
     }
 
     pub fn collect(&mut self) {
@@ -189,6 +216,9 @@ impl Collector {
 
                     let vtable = header.vtable;
                     (vtable.drop_fn)(ptr); // Call the drop function to deallocate the node
+
+                    gc.stats.allocated_bytes -= (vtable.size_fn)();
+                    gc.stats.allocated_objects -= 1;
 
                     current = next;
                 }
