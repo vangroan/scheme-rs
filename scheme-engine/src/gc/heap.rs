@@ -15,7 +15,7 @@ use crate::gc::Gc;
 //                                                                            //
 // ========================================================================== //
 
-const INITIAL_HEAP_SIZE: usize = 1024 * 1024 * 1024; // bytes
+const MIN_HEAP_SIZE: usize = 1024 * 1024 * 1024; // bytes
 
 /// Statistics about the garbage collector's heap.
 #[derive(Default, Debug, Clone)]
@@ -38,7 +38,7 @@ pub struct GcHeap {
 impl GcHeap {
     pub fn new() -> Self {
         let stats = GcStats {
-            threshhold_bytes: INITIAL_HEAP_SIZE,
+            threshhold_bytes: MIN_HEAP_SIZE,
             ..Default::default()
         };
         GcHeap { stats, head: None }
@@ -92,11 +92,21 @@ impl GcHeap {
     }
 
     fn ensure_heap_size(&mut self, target_size: usize) {
-        if target_size >= self.stats.threshhold_bytes
-            || self.stats.allocated_bytes >= self.stats.threshhold_bytes
-        {
+        if target_size >= self.stats.threshhold_bytes {
             self.collect();
             self.stats.threshhold_bytes = self.stats.allocated_bytes * 2;
+        }
+    }
+
+    fn shrink_heap_size(&mut self) {
+        if self.stats.allocated_bytes < self.stats.threshhold_bytes / 4 {
+            self.stats.threshhold_bytes = std::cmp::max(
+                MIN_HEAP_SIZE,
+                std::cmp::max(
+                    self.stats.allocated_bytes * 2,
+                    self.stats.threshhold_bytes / 2,
+                ),
+            );
         }
     }
 
@@ -265,6 +275,8 @@ impl Collector {
                 (node_ref.vtable().dealloc_fn)(node);
             }
         }
+
+        gc.shrink_heap_size();
     }
 }
 
