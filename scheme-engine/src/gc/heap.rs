@@ -210,19 +210,8 @@ impl Collector {
                 node_ref.header().unmark();
                 node_ref.header().reset_in_heap();
             } else if !node_ref.header().is_marked() {
+                // FIXME: Drop will recursively drop objects that are referenced by this vector.
                 unreachable_nodes.push(node);
-
-                // Remove this node from the linked list.
-                // if let Some(prev_node) = prev {
-                //     let prev_node_ref = unsafe { prev_node.as_ref() };
-                //     prev_node_ref.header().set_next(node_ref.next_node());
-                // }
-
-                // SAFETY: The box must be created with a reference to the correct vtable.
-                // unsafe {
-                //     // Node is unreachable, deallocate it.
-                //     (node_ref.vtable().drop_fn)(node);
-                // }
             }
 
             current = node_ref.next_node();
