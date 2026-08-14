@@ -1085,8 +1085,6 @@ impl ProcState {
     }
 
     fn into_procedure(self, env: Handle<Env>) -> Proc {
-        println!("compiled procedure: {self:?}");
-
         let Self {
             code,
             sig,
