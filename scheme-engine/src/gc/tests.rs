@@ -164,7 +164,8 @@ fn test_gc_heap_single_level() {
     let root = {
         // Ensure the stack drops leaf before collect.
         let leaf = heap.alloc(Node::new(42));
-        heap.alloc(Node::new(7).with_next(leaf))
+        let branch = heap.alloc(Node::new(11).with_next(leaf));
+        heap.alloc(Node::new(7).with_next(branch))
     };
 
     heap.collect();
@@ -172,7 +173,10 @@ fn test_gc_heap_single_level() {
 
     // Leaf node should not be dropped because it is reachable from the root.
     assert_eq!(root.as_ref().data, 7);
-    assert_eq!(root.as_ref().next().unwrap().as_ref().data, 42);
+    assert_eq!(
+        root.as_ref().next().unwrap().as_ref().next().unwrap().data,
+        42
+    );
 }
 
 #[test]

@@ -173,10 +173,7 @@ impl Collector {
             }
 
             if node_ref.header().is_rooted() {
-                // SAFETY: The box must be created with a reference to the correct vtable.
-                unsafe {
-                    (node_ref.vtable().trace_fn)(node, &mut self.tracer);
-                }
+                self.tracer.enqueue(node);
             }
 
             Self::trace_nodes_to_mark(&mut self.tracer);
@@ -195,7 +192,10 @@ impl Collector {
         while let Some(node) = tracer.try_dequeue() {
             let node_ref = unsafe { node.as_ref() };
 
-            node_ref.header().mark();
+            // SAFETY: The box must be created with a reference to the correct vtable.
+            unsafe {
+                (node_ref.vtable().trace_fn)(node, tracer);
+            }
         }
     }
 
@@ -347,6 +347,7 @@ impl<T: Trace + 'static> GcBox<T> {
 
 impl<T: Trace + 'static> Trace for GcBox<T> {
     fn trace(&self, tracer: &mut Tracer) {
+        self.header().mark();
         self.data.trace(tracer);
     }
 
