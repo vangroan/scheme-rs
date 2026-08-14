@@ -20,7 +20,8 @@ impl Tracer {
         }
     }
 
-    pub fn enqueue(&mut self, ptr: NonNull<ErasedBox>) {
+    // TODO: Consider making this a public API for custom tracing.
+    pub(crate) fn enqueue(&mut self, ptr: NonNull<ErasedBox>) {
         unsafe {
             if ptr.as_ref().header().is_marked() {
                 return;
