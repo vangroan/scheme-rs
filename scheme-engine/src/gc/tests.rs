@@ -191,4 +191,28 @@ fn test_gc_heap_cycle_detection() {
 
     heap.collect();
     assert_eq!(drop_count(), 0);
+    assert_eq!(heap.stats().allocated_objects, 2);
+    assert_eq!(
+        heap.stats().allocated_bytes,
+        2 * std::mem::size_of::<GcBox<Node>>()
+    );
+}
+
+#[test]
+fn test_gc_heap_cycle_collection() {
+    clear_drop_count();
+
+    let mut heap = GcHeap::new();
+
+    let node1 = heap.alloc(Node::new(7));
+    let node2 = heap.alloc(Node::new(11).with_next(node1.clone()));
+    node1.as_ref().next.replace(Some(node2.clone()));
+
+    drop(node1);
+    drop(node2);
+
+    heap.collect();
+    assert_eq!(drop_count(), 2);
+    assert_eq!(heap.stats().allocated_objects, 0);
+    assert_eq!(heap.stats().allocated_bytes, 0);
 }

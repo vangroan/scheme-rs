@@ -15,21 +15,22 @@ pub trait Trace {
 
 pub struct Tracer {
     queue: VecDeque<NonNull<ErasedBox>>,
-    seen: HashSet<NonNull<ErasedBox>>,
 }
 
 impl Tracer {
     pub(super) fn new() -> Self {
         Tracer {
             queue: VecDeque::new(),
-            seen: HashSet::new(),
         }
     }
 
     pub fn enqueue(&mut self, ptr: NonNull<ErasedBox>) {
-        if self.seen.insert(ptr) {
-            self.queue.push_back(ptr);
+        unsafe {
+            if ptr.as_ref().header().is_marked() {
+                return;
+            }
         }
+        self.queue.push_back(ptr);
     }
 
     pub(crate) fn try_dequeue(&mut self) -> Option<NonNull<ErasedBox>> {
@@ -37,10 +38,7 @@ impl Tracer {
     }
 
     pub(super) fn clear(&mut self) {
-        self.seen.clear();
         self.queue.clear();
-
-        self.seen.shrink_to_fit();
         self.queue.shrink_to_fit();
     }
 }

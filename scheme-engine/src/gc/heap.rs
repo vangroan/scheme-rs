@@ -145,9 +145,6 @@ impl Collector {
         while let Some(node) = current {
             let node_ref = unsafe { node.as_ref() };
 
-            // The node is reachable from within the heap.
-            node_ref.header().incr_in_heap();
-
             // SAFETY: The box must be created with a reference to the correct vtable.
             unsafe {
                 (node_ref.vtable().trace_in_heap_fn)(node);
@@ -318,7 +315,8 @@ impl GcHeader {
     }
 
     fn is_rooted(&self) -> bool {
-        self.strong_count.get() > 0
+        // external-refs = total-refs - internal-refs
+        self.in_heap_count.get() < self.strong_count.get()
     }
 }
 
