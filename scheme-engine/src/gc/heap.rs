@@ -317,24 +317,38 @@ impl GcHeader {
     }
 
     pub(super) fn incr_strong(&self) {
+        let mark_and_count = self.strong_count.get();
+
+        let count = (mark_and_count & COUNT_MASK) + 1;
+        let dropped_flag = mark_and_count & MARK_MASK;
+
         // Ensure the strong count does not exceed the maximum internal heap count.
-        let count = (self.strong_count.get() & COUNT_MASK) + 1;
         if count == MAX_COUNT {
             panic!("strong_count overflow");
         }
-        self.strong_count.set(count);
+
+        self.strong_count.set(dropped_flag | count);
     }
 
     pub(super) fn decr_strong(&self) {
-        self.strong_count.set(self.strong_count.get() - 1);
+        let mark_and_count = self.strong_count.get();
+
+        let count = (mark_and_count & COUNT_MASK) - 1;
+        let dropped_flag = mark_and_count & MARK_MASK;
+
+        self.strong_count.set(dropped_flag | count);
     }
 
     pub(super) fn incr_in_heap(&self) {
-        let count = (self.in_heap_count.get() & COUNT_MASK) + 1;
+        let mark_and_count = self.in_heap_count.get();
+        let count = (mark_and_count & COUNT_MASK) + 1;
+        let marked_flag = mark_and_count & MARK_MASK;
+
         if count == MAX_COUNT {
             panic!("in_heap_count overflow");
         }
-        self.in_heap_count.set(count);
+
+        self.in_heap_count.set(marked_flag | count);
     }
 
     pub(crate) fn is_dropped(&self) -> bool {
@@ -358,8 +372,11 @@ impl GcHeader {
     }
 
     pub fn unmark(&self) {
-        self.in_heap_count
-            .set(self.in_heap_count.get() & COUNT_MASK);
+        let mark_and_count = self.in_heap_count.get();
+        let count = mark_and_count & COUNT_MASK;
+        let marked_flag = mark_and_count & MARK_MASK;
+
+        self.in_heap_count.set(marked_flag | count & !MARK_MASK);
     }
 
     fn is_rooted(&self) -> bool {
@@ -426,3 +443,44 @@ impl Drop for Erased {
 }
 
 pub(crate) type ErasedBox = GcBox<Erased>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_gc_header_preserve_dropped_flag() {
+        let header = GcHeader {
+            next: Cell::new(None),
+            vtable: vtable_of::<()>(),
+            strong_count: Cell::new(0),
+            in_heap_count: Cell::new(0),
+        };
+        assert!(!header.is_dropped());
+
+        header.set_dropped();
+        assert!(header.is_dropped());
+
+        header.incr_strong();
+
+        assert!(header.is_dropped());
+    }
+
+    #[test]
+    fn test_gc_header_preserve_marked_flag() {
+        let header = GcHeader {
+            next: Cell::new(None),
+            vtable: vtable_of::<()>(),
+            strong_count: Cell::new(0),
+            in_heap_count: Cell::new(0),
+        };
+        assert!(!header.is_marked());
+
+        header.mark();
+        assert!(header.is_marked());
+
+        header.incr_in_heap();
+
+        assert!(header.is_marked());
+    }
+}
