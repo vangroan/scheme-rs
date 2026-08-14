@@ -64,37 +64,3 @@ impl<T: Trace + 'static> Drop for Gc<T> {
         unsafe { self.inner().header().decr_strong() };
     }
 }
-
-#[deprecated(note = "Use `Gc` instead.")]
-#[repr(transparent)]
-pub struct Root<T: Trace + 'static> {
-    pub(super) ptr: NonNull<GcBox<T>>,
-}
-
-impl<T: Trace + 'static> Root<T> {
-    pub(super) fn new(mut ptr: NonNull<GcBox<T>>) -> Self {
-        unsafe {
-            ptr.as_mut().header().incr_strong();
-        }
-        Root { ptr }
-    }
-
-    pub fn as_ref(&self) -> &T {
-        unsafe { &self.ptr.as_ref().as_ref() }
-    }
-}
-
-impl<T: Trace + 'static> Clone for Root<T> {
-    fn clone(&self) -> Self {
-        unsafe {
-            self.ptr.as_ref().header().incr_strong();
-        }
-        Root { ptr: self.ptr }
-    }
-}
-
-impl<T: Trace + 'static> Drop for Root<T> {
-    fn drop(&mut self) {
-        unsafe { self.ptr.as_ref().header().decr_strong() };
-    }
-}
