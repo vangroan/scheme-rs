@@ -6,4 +6,5 @@ mod trace;
 mod tests;
 
 pub use heap::GcHeap;
-pub use pointer::{Gc, Root};
+pub use pointer::Gc;
+pub use trace::{Trace, Tracer};

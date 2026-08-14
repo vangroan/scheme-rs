@@ -32,7 +32,7 @@ impl Tracer {
         }
     }
 
-    pub(super) fn try_dequeue(&mut self) -> Option<NonNull<ErasedBox>> {
+    pub(crate) fn try_dequeue(&mut self) -> Option<NonNull<ErasedBox>> {
         self.queue.pop_front()
     }
 
@@ -80,7 +80,7 @@ impl_trace_terminal!(f32);
 impl_trace_terminal!(f64);
 impl_trace_terminal!(&str);
 
-pub(super) struct VTable {
+pub(crate) struct VTable {
     pub trace_fn: unsafe fn(NonNull<ErasedBox>, &mut Tracer),
     pub trace_in_heap_fn: unsafe fn(NonNull<ErasedBox>),
     pub drop_fn: unsafe fn(NonNull<ErasedBox>),
@@ -101,7 +101,7 @@ where
 
         unsafe fn trace_in_heap_fn(this: NonNull<ErasedBox>) {
             let this: NonNull<GcBox<Self>> = this.cast();
-            Trace::trace_in_heap(this.as_ref().as_ref());
+            Trace::trace_in_heap(this.as_ref());
         }
 
         /// The `drop_fn` is responsible for deallocating the memory of the object.
