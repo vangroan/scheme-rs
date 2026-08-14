@@ -1,11 +1,7 @@
-use std::{
-    collections::{HashSet, VecDeque},
-    ptr::NonNull,
-};
+use std::collections::VecDeque;
+use std::ptr::NonNull;
 
-use crate::gc::heap::GcBox;
-
-use super::heap::ErasedBox;
+use crate::gc::heap::{ErasedBox, GcBox};
 
 pub trait Trace {
     fn trace(&self, tracer: &mut Tracer);
@@ -81,7 +77,8 @@ impl_trace_terminal!(&str);
 pub(crate) struct VTable {
     pub trace_fn: unsafe fn(NonNull<ErasedBox>, &mut Tracer),
     pub trace_in_heap_fn: unsafe fn(NonNull<ErasedBox>),
-    pub drop_fn: unsafe fn(NonNull<ErasedBox>),
+    pub drop_data_fn: unsafe fn(NonNull<ErasedBox>),
+    pub dealloc_fn: unsafe fn(NonNull<ErasedBox>),
     pub size_fn: fn() -> usize,
 }
 
@@ -102,15 +99,34 @@ where
             Trace::trace_in_heap(this.as_ref());
         }
 
-        /// The `drop_fn` is responsible for deallocating the memory of the object.
-        ///
-        /// Preserving the original type information is crucial for correctly
-        /// dropping the object, especially if it has a custom `Drop` implementation.
-        unsafe fn drop_fn(this: NonNull<ErasedBox>) {
+        /// Drop only the payload. The header stays intact so recursive `Gc<T>` drops
+        /// can still touch metadata on other unreachable nodes in this GC cycle.
+        unsafe fn drop_data_fn(this: NonNull<ErasedBox>) {
             let this: NonNull<GcBox<Self>> = this.cast();
 
-            // `T` drop called by Box
-            drop(Box::from_raw(this.as_ptr()));
+            // Multiple drops can be attempted on the same node if there are
+            // cycles in the object graph.
+            if this.as_ref().header().is_dropped() {
+                return;
+            }
+
+            std::ptr::drop_in_place(&mut ((*this.as_ptr()).data));
+            this.as_ref().header().set_dropped();
+        }
+
+        /// Deallocate a previously dropped node without running destructors again.
+        unsafe fn dealloc_fn(this: NonNull<ErasedBox>) {
+            let this: NonNull<GcBox<Self>> = this.cast();
+
+            debug_assert!(
+                this.as_ref().header().is_dropped(),
+                "Attempted to deallocate a GcBox that has not been dropped"
+            );
+
+            std::alloc::dealloc(
+                this.as_ptr().cast::<u8>(),
+                std::alloc::Layout::new::<GcBox<Self>>(),
+            );
         }
 
         /// Size of the downcasted type.
@@ -123,7 +139,8 @@ where
         const VTABLE: &'static VTable = &VTable {
             trace_fn: <T as HasVTable>::trace_fn,
             trace_in_heap_fn: <T as HasVTable>::trace_in_heap_fn,
-            drop_fn: <T as HasVTable>::drop_fn,
+            drop_data_fn: <T as HasVTable>::drop_data_fn,
+            dealloc_fn: <T as HasVTable>::dealloc_fn,
             size_fn: <T as HasVTable>::size,
         };
     }

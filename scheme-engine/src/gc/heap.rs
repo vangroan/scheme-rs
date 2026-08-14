@@ -1,3 +1,4 @@
+use std::alloc::Layout;
 use std::cell::Cell;
 use std::ptr::NonNull;
 
@@ -53,7 +54,15 @@ impl GcHeap {
     {
         self.ensure_heap_size(self.stats.allocated_bytes + std::mem::size_of::<GcBox<T>>());
 
-        let boxed = Box::new(GcBox {
+        let layout = Layout::new::<GcBox<T>>();
+        assert!(layout.size() > 0, "Cannot allocate zero-sized type");
+
+        // SAFTEY: Layout must not be zero-sized.
+        let ptr = NonNull::new(unsafe { std::alloc::alloc(layout) })
+            .expect("Allocation failed")
+            .cast::<GcBox<T>>();
+
+        let gc_box = GcBox {
             header: GcHeader {
                 next: Cell::new(self.head),
                 vtable: vtable_of::<T>(),
@@ -61,11 +70,17 @@ impl GcHeap {
                 in_heap_count: Cell::new(0),
             },
             data,
-        });
+        };
+
+        // SAFETY: The pointer is valid and properly aligned for the type.
+        // The old contents is uninitialized, so doesn't need drop.
+        unsafe {
+            ptr.as_ptr().write(gc_box);
+        }
+
         self.stats.allocated_bytes += std::mem::size_of::<GcBox<T>>();
         self.stats.allocated_objects += 1;
 
-        let ptr = NonNull::new(Box::into_raw(boxed)).expect("Box::into_raw returned null");
         self.head = Some(ptr.cast());
 
         Gc::new(ptr)
@@ -202,28 +217,43 @@ impl Collector {
         let mut unreachable_nodes = Vec::new();
 
         let mut current: Option<NonNull<ErasedBox>> = gc.head;
+        let mut prev: Option<NonNull<ErasedBox>> = None;
 
         while let Some(node) = current {
             let node_ref = unsafe { node.as_ref() };
+            let next = node_ref.next_node();
 
-            if node_ref.header().is_rooted() {
+            if node_ref.header().is_marked() || node_ref.header().is_rooted() {
                 node_ref.header().unmark();
                 node_ref.header().reset_in_heap();
-            } else if !node_ref.header().is_marked() {
-                // FIXME: Drop will recursively drop objects that are referenced by this vector.
+                prev = Some(node);
+            } else {
+                if let Some(prev_node) = prev {
+                    unsafe { prev_node.as_ref() }.header().set_next(next);
+                } else {
+                    gc.head = next;
+                }
+
                 unreachable_nodes.push(node);
             }
 
-            current = node_ref.next_node();
+            current = next;
         }
 
-        // Deallocate unreachable nodes after the sweep phase to avoid
-        // invalidating the linked list during iteration.
-        for node in unreachable_nodes {
-            if gc.head == Some(node) {
-                gc.head = unsafe { node.as_ref() }.next_node();
-            }
+        // Drop inner data first while all headers remain valid. This avoids
+        // use-after-free when dropping one object recursively drops Gc fields
+        // that still point at other unreachable nodes.
+        for &node in &unreachable_nodes {
+            let node_ref = unsafe { node.as_ref() };
 
+            // SAFETY: The box must be created with a reference to the correct vtable.
+            unsafe {
+                (node_ref.vtable().drop_data_fn)(node);
+            }
+        }
+
+        // Then release backing allocations without running destructors again.
+        for node in unreachable_nodes {
             let node_ref = unsafe { node.as_ref() };
 
             // SAFETY: The box must be created with a reference to the correct vtable.
@@ -232,7 +262,7 @@ impl Collector {
                 gc.stats.allocated_bytes -= node_size;
                 gc.stats.allocated_objects -= 1;
 
-                (node_ref.vtable().drop_fn)(node);
+                (node_ref.vtable().dealloc_fn)(node);
             }
         }
     }
@@ -252,6 +282,15 @@ const MARK_MASK: u32 = 1 << 31;
 const COUNT_MASK: u32 = !MARK_MASK;
 const MAX_COUNT: u32 = COUNT_MASK;
 
+/// [`GcHeader::strong_count`] holds the number of external references to the
+/// object. This count is incremented when a new `Gc<T>` is created and
+/// decremented when a `Gc<T>` is dropped. When the strong count reaches zero,
+/// the object is considered unreachable from the root set and can be collected
+/// by the garbage collector.
+///
+/// [`GcHeader::in_heap_count`] holds the marker bit in the most significant bit
+/// of the 32-bit integer. The remaining 31 bits are used to count the number of
+/// internal references to the object.
 #[repr(C)]
 pub(crate) struct GcHeader {
     next: Cell<Option<NonNull<ErasedBox>>>,
@@ -267,11 +306,11 @@ impl GcHeader {
 
     pub(super) fn incr_strong(&self) {
         // Ensure the strong count does not exceed the maximum internal heap count.
-        let count = self.strong_count.get();
+        let count = (self.strong_count.get() & COUNT_MASK) + 1;
         if count == MAX_COUNT {
             panic!("strong_count overflow");
         }
-        self.strong_count.set(count + 1);
+        self.strong_count.set(count);
     }
 
     pub(super) fn decr_strong(&self) {
@@ -279,11 +318,19 @@ impl GcHeader {
     }
 
     pub(super) fn incr_in_heap(&self) {
-        let count = self.in_heap_count.get();
+        let count = (self.in_heap_count.get() & COUNT_MASK) + 1;
         if count == MAX_COUNT {
             panic!("in_heap_count overflow");
         }
-        self.in_heap_count.set(count + 1);
+        self.in_heap_count.set(count);
+    }
+
+    pub(crate) fn is_dropped(&self) -> bool {
+        self.strong_count.get() & MARK_MASK != 0
+    }
+
+    pub(crate) fn set_dropped(&self) {
+        self.strong_count.set(self.strong_count.get() | MARK_MASK);
     }
 
     pub(super) fn reset_in_heap(&self) {
@@ -312,7 +359,7 @@ impl GcHeader {
 #[repr(C)]
 pub(crate) struct GcBox<T: Trace + 'static> {
     header: GcHeader,
-    data: T,
+    pub(crate) data: T,
 }
 
 impl<T: Trace + 'static> GcBox<T> {
@@ -330,6 +377,9 @@ impl<T: Trace + 'static> GcBox<T> {
 
     #[inline]
     pub fn as_ref(&self) -> &T {
+        if self.header().is_dropped() {
+            panic!("Attempted to access dropped GcBox");
+        }
         &self.data
     }
 }

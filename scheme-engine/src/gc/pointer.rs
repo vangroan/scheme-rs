@@ -6,8 +6,8 @@ use std::ptr::NonNull;
 
 #[repr(transparent)]
 pub struct Gc<T: Trace + 'static> {
-    pub(crate) ptr: NonNull<GcBox<T>>,
-    pub(crate) _marker: PhantomData<std::rc::Rc<T>>,
+    ptr: NonNull<GcBox<T>>,
+    _marker: PhantomData<std::rc::Rc<T>>,
 }
 
 impl<T: Trace + 'static> Gc<T> {
@@ -28,7 +28,9 @@ impl<T: Trace + 'static> Gc<T> {
 }
 
 impl<T: Trace + 'static> Trace for Gc<T> {
-    fn trace(&self, _tracer: &mut Tracer) {}
+    fn trace(&self, tracer: &mut Tracer) {
+        tracer.enqueue(self.ptr.cast());
+    }
 
     fn trace_in_heap(&self) {
         unsafe {
