@@ -37,6 +37,9 @@ fn test_gc_heap_collect() {
 
     heap.collect();
     println!("After first collection: {:?}", heap.stats());
+
+    assert_eq!(heap.stats().allocated_objects, 0);
+    assert_eq!(heap.stats().allocated_bytes, 0);
 }
 
 thread_local! {

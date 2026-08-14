@@ -140,11 +140,12 @@ impl Collector {
         while let Some(node) = current {
             let node_ref = unsafe { node.as_ref() };
 
-            let vtable = node_ref.vtable();
+            // The node is reachable from within the heap.
+            node_ref.header().incr_in_heap();
 
             // SAFETY: The box must be created with a reference to the correct vtable.
             unsafe {
-                (vtable.trace_in_heap_fn)(node);
+                (node_ref.vtable().trace_in_heap_fn)(node);
             }
 
             current = node_ref.next_node();
@@ -345,8 +346,6 @@ impl<T: Trace + 'static> Trace for GcBox<T> {
     }
 
     fn trace_in_heap(&self) {
-        self.header.incr_in_heap();
-
         self.data.trace_in_heap();
     }
 }
