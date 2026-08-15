@@ -1,5 +1,6 @@
 mod gc_box;
 mod gc_header;
+mod gc_refcell;
 mod heap;
 mod pointer;
 mod trace;
@@ -7,6 +8,7 @@ mod trace;
 #[cfg(test)]
 mod tests;
 
+pub use self::gc_refcell::{GcBorrowError, GcBorrowMutError, GcMut, GcRef, GcRefCell};
 pub use self::heap::GcHeap;
 pub use self::pointer::Gc;
 pub use self::trace::{Trace, Tracer};
