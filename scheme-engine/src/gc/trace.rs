@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 use std::ptr::NonNull;
 
-use crate::gc::heap::{ErasedBox, GcBox};
+use crate::gc::gc_box::{ErasedBox, GcBox};
 
 pub trait Trace {
     fn trace(&self, tracer: &mut Tracer);

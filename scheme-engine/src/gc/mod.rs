@@ -1,3 +1,5 @@
+mod gc_box;
+mod gc_header;
 mod heap;
 mod pointer;
 mod trace;

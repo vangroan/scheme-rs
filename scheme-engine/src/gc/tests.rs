@@ -1,7 +1,7 @@
-use std::cell::{Cell, RefCell};
-
-use crate::gc::heap::GcBox;
+use crate::gc::gc_box::GcBox;
 use crate::gc::{Gc, GcHeap, Trace};
+
+use std::cell::{Cell, RefCell};
 
 #[test]
 fn test_gc_heap_alloc() {

@@ -1,5 +1,6 @@
-use crate::gc::heap::GcBox;
+use crate::gc::gc_box::GcBox;
 use crate::gc::trace::{Trace, Tracer};
+
 use std::marker::PhantomData;
 use std::ops::Deref;
 use std::ptr::NonNull;
