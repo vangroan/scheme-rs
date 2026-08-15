@@ -1,10 +1,8 @@
 use std::cell::Cell;
 use std::ptr::NonNull;
 
-use crate::gc::gc_box::ErasedBox;
-use crate::gc::trace::vtable_of;
-use crate::gc::trace::VTable;
-use crate::Trace;
+use crate::gc_box::ErasedBox;
+use crate::trace::{Trace, VTable, vtable_of};
 
 const MARK_MASK: u32 = 1 << 31;
 const COUNT_MASK: u32 = !MARK_MASK;
@@ -122,7 +120,7 @@ impl GcHeader {
 mod tests {
     use std::cell::Cell;
 
-    use crate::gc::trace::vtable_of;
+    use crate::trace::vtable_of;
 
     use super::*;
 

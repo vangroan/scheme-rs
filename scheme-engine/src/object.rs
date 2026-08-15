@@ -1,6 +1,6 @@
 //! Heap allocated objects.
 
-use crate::gc::Gc;
+use scheme_gc::prelude::*;
 
 #[repr(C)]
 pub struct ConsObj(Gc<()>);

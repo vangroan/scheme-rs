@@ -1,10 +1,10 @@
 use std::alloc::Layout;
 use std::ptr::NonNull;
 
-use crate::gc::gc_box::{ErasedBox, GcBox};
-use crate::gc::gc_header::GcHeader;
-use crate::gc::trace::{Trace, Tracer};
-use crate::gc::Gc;
+use crate::gc_box::{ErasedBox, GcBox};
+use crate::gc_header::GcHeader;
+use crate::pointer::Gc;
+use crate::trace::{Trace, Tracer};
 
 // ========================================================================== //
 //                                                                            //

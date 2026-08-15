@@ -14,3 +14,4 @@ criterion = "0.5"
 
 [dependencies]
 smol_str = "0.1"
+scheme-gc = { path = "../scheme-gc" }

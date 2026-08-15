@@ -1,7 +1,7 @@
-use crate::gc::gc_header::GcHeader;
-use crate::gc::trace::{Trace, Tracer, VTable};
-
 use std::ptr::NonNull;
+
+use crate::gc_header::GcHeader;
+use crate::trace::{Trace, Tracer, VTable};
 
 #[repr(C)]
 pub(crate) struct GcBox<T: Trace + 'static> {

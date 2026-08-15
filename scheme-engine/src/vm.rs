@@ -1,11 +1,12 @@
 //! Virtual machine.
+use std::mem;
 
 use crate::error::{Error, Result};
 use crate::expr::{Closure, Expr, UpValue};
-use crate::gc::GcHeap;
 use crate::handle::Handle;
 use crate::opcode::{Op, UpValueOrigin};
-use std::mem;
+
+use scheme_gc::GcHeap;
 
 pub fn eval(closure: Handle<Closure>) -> Result<Expr> {
     let mut vm = Vm::new();

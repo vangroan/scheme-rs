@@ -1,9 +1,9 @@
-use crate::gc::gc_box::GcBox;
-use crate::gc::trace::{Trace, Tracer};
-
 use std::marker::PhantomData;
 use std::ops::Deref;
 use std::ptr::NonNull;
+
+use crate::gc_box::GcBox;
+use crate::trace::{Trace, Tracer};
 
 #[repr(transparent)]
 pub struct Gc<T: Trace + 'static> {
@@ -20,7 +20,7 @@ impl<T: Trace + 'static> Gc<T> {
     }
 
     pub(crate) unsafe fn inner(&self) -> &GcBox<T> {
-        self.ptr.as_ref()
+        unsafe { self.ptr.as_ref() }
     }
 
     pub fn as_ref(&self) -> &T {
