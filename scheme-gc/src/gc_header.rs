@@ -2,7 +2,7 @@ use std::cell::Cell;
 use std::ptr::NonNull;
 
 use crate::gc_box::ErasedBox;
-use crate::trace::{Trace, VTable, vtable_of};
+use crate::trace::{vtable_of, Trace, VTable};
 
 const MARK_MASK: u32 = 1 << 31;
 const COUNT_MASK: u32 = !MARK_MASK;
