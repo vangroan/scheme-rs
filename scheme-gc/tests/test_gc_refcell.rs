@@ -95,23 +95,23 @@ fn test_nexted_write_guard() {
     clear_drop_count();
 
     let mut heap = GcHeap::new();
-    let leaf = heap.alloc(GcRefCell::new(Node {
+    let leaf = heap.alloc(Node {
         next: GcRefCell::new(None),
         data: 1,
-    }));
+    });
     let root = heap.alloc(GcRefCell::new(Node {
-        next: GcRefCell::new(Some(leaf.borrow())),
+        next: GcRefCell::new(Some(leaf.clone())),
         data: 2,
     }));
 
-    *node1.borrow_mut().next.borrow_mut() = Some(node2.clone());
+    *root.borrow_mut().next.borrow_mut() = Some(leaf.clone());
 
     // The nodes should not be traced while they are mutably borrowed.
     heap.collect();
     assert_eq!(drop_count(), 0);
 
-    drop(node1);
-    drop(node2);
+    drop(root);
+    drop(leaf);
 
     heap.collect();
     assert_eq!(drop_count(), 2);
