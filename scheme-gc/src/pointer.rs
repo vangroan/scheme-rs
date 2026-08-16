@@ -5,6 +5,18 @@ use std::ptr::NonNull;
 use crate::gc_box::GcBox;
 use crate::trace::{Trace, Tracer};
 
+/// Assert that the box being pointed to has not been dropped.
+///
+/// Can only detect the phase between drop and deallocation.
+macro_rules! assert_not_dropped {
+    ($gc:expr) => {
+        if cfg!(debug_assertions) {
+            let value = unsafe { ($gc).inner() };
+            debug_assert!(!value.header().is_dropped());
+        }
+    };
+}
+
 #[repr(transparent)]
 pub struct Gc<T: Trace + 'static> {
     ptr: NonNull<GcBox<T>>,
@@ -30,6 +42,8 @@ impl<T: Trace + 'static> Gc<T> {
 
 impl<T: Trace + 'static> Trace for Gc<T> {
     fn trace(&self, tracer: &mut Tracer) {
+        assert_not_dropped!(self);
+
         // To avoid excessive recursion we enqueue the box (edge of the object
         // graph) to be iteratively searched.
         tracer.enqueue(self.ptr.cast());
