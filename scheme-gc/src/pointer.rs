@@ -30,6 +30,8 @@ impl<T: Trace + 'static> Gc<T> {
 
 impl<T: Trace + 'static> Trace for Gc<T> {
     fn trace(&self, tracer: &mut Tracer) {
+        // To avoid excessive recursion we enqueue the box (edge of the object
+        // graph) to be iteratively searched.
         tracer.enqueue(self.ptr.cast());
     }
 
