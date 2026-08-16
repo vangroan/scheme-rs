@@ -77,7 +77,8 @@ impl<T: Trace> GcRefCell<T> {
 
 impl<T: Trace> Trace for GcRefCell<T> {
     fn trace(&self, tracer: &mut Tracer) {
-        unsafe { self.value.get().as_ref().unwrap() }.trace(tracer);
+        let value = unsafe { self.value.get().as_ref().unwrap() };
+        Trace::trace(value, tracer);
     }
 
     fn trace_in_heap(&self) {
@@ -92,7 +93,8 @@ impl<T: Trace> Trace for GcRefCell<T> {
         // next collection, after the GcMut is dropped.
         if self.state() != BorrowState::Writing {
             // SAFETY: Pointer is valid because borrow is tracked at runtime.
-            unsafe { self.value.get().as_ref().unwrap() }.trace_in_heap();
+            let value = unsafe { self.value.get().as_ref().unwrap() };
+            Trace::trace_in_heap(value);
         }
     }
 }
