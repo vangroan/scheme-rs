@@ -80,8 +80,7 @@ impl GcHeap {
         Gc::new(ptr)
     }
 
-    #[allow(dead_code, reason = "Used in unit tests")]
-    pub(crate) fn set_collect_threshold(&mut self, threshold: usize) {
+    pub fn set_collect_threshold(&mut self, threshold: usize) {
         self.stats.threshhold_bytes = threshold;
     }
 
