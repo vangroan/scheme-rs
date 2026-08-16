@@ -15,6 +15,7 @@ pub use self::trace::{Trace, Tracer};
 
 pub mod prelude {
     pub use crate::Gc;
+    pub use crate::GcHeap;
     pub use crate::Trace;
     pub use crate::Tracer;
 }

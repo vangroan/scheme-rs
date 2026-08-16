@@ -3,8 +3,9 @@ use std::ptr::NonNull;
 use crate::gc_header::GcHeader;
 use crate::trace::{Trace, Tracer, VTable};
 
+#[doc(hidden)]
 #[repr(C)]
-pub(crate) struct GcBox<T: Trace + 'static> {
+pub struct GcBox<T: Trace + 'static> {
     header: GcHeader,
     pub(crate) data: T,
 }
@@ -14,7 +15,7 @@ impl<T: Trace + 'static> GcBox<T> {
         GcBox { header, data }
     }
 
-    pub fn header(&self) -> &GcHeader {
+    pub(crate) fn header(&self) -> &GcHeader {
         &self.header
     }
 
@@ -46,7 +47,8 @@ impl<T: Trace + 'static> Trace for GcBox<T> {
 }
 
 /// A typed-erased value that ensures an upcasted value is not traced.
-pub(crate) struct Erased(());
+#[doc(hidden)]
+pub struct Erased(());
 
 impl Trace for Erased {
     fn trace(&self, _tracer: &mut Tracer) {
@@ -64,4 +66,5 @@ impl Drop for Erased {
     }
 }
 
-pub(crate) type ErasedBox = GcBox<Erased>;
+#[doc(hidden)]
+pub type ErasedBox = GcBox<Erased>;

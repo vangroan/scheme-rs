@@ -76,12 +76,24 @@ impl<T: Trace> GcRefCell<T> {
 }
 
 impl<T: Trace> Trace for GcRefCell<T> {
-    fn trace(&self, _tracer: &mut Tracer) {
-        todo!()
+    fn trace(&self, tracer: &mut Tracer) {
+        unsafe { self.value.get().as_ref().unwrap() }.trace(tracer);
     }
 
     fn trace_in_heap(&self) {
-        todo!()
+        // The outer GcBox can be marked as reachable, but the inner value
+        // should not be traced if it is mutably borrowed. The current
+        // collection could be triggered by an assignment to this inner value.
+        //
+        // By not tracing the inner value the root count will exceed the
+        // internal references, and the inner value will be treated as a root.
+        //
+        // In the worst case an island of cyclical roots will survive until the
+        // next collection, after the GcMut is dropped.
+        if self.state() != BorrowState::Writing {
+            // SAFETY: Pointer is valid because borrow is tracked at runtime.
+            unsafe { self.value.get().as_ref().unwrap() }.trace_in_heap();
+        }
     }
 }
 

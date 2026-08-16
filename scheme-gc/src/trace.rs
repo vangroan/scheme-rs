@@ -21,7 +21,7 @@ impl Tracer {
     }
 
     // TODO: Consider making this a public API for custom tracing.
-    pub(crate) fn enqueue(&mut self, ptr: NonNull<ErasedBox>) {
+    pub fn enqueue(&mut self, ptr: NonNull<ErasedBox>) {
         unsafe {
             if ptr.as_ref().header().is_marked() {
                 return;
@@ -74,6 +74,23 @@ impl_trace_terminal!(usize);
 impl_trace_terminal!(f32);
 impl_trace_terminal!(f64);
 impl_trace_terminal!(&str);
+
+impl<T> Trace for Option<T>
+where
+    T: Trace,
+{
+    fn trace(&self, tracer: &mut Tracer) {
+        if let Some(value) = self {
+            value.trace(tracer);
+        }
+    }
+
+    fn trace_in_heap(&self) {
+        if let Some(value) = self {
+            value.trace_in_heap();
+        }
+    }
+}
 
 pub(crate) struct VTable {
     pub trace_fn: unsafe fn(NonNull<ErasedBox>, &mut Tracer),
