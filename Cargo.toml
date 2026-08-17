@@ -5,6 +5,7 @@
 resolver = "2"
 
 members = [
-    "./scheme",
-    "./scheme-engine",
+    "scheme",
+    "scheme-engine",
+    "scheme-gc",
 ]

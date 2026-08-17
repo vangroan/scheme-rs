@@ -8,6 +8,7 @@ mod ext;
 mod handle;
 mod lexer;
 mod limits;
+mod object;
 mod opcode;
 mod parser;
 mod span;
@@ -21,9 +22,10 @@ pub use self::core::init_core;
 pub use self::env::Env;
 pub use self::expr::{Closure, Expr, Proc};
 pub use self::handle::Handle;
+pub use self::object::ConsObj;
 pub use self::parser::parse;
-pub use self::vm::{call, eval};
 pub use self::value::ValuePtr;
+pub use self::vm::{call, eval};
 
 pub mod prelude {}
 

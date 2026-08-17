@@ -1,10 +1,12 @@
 //! Virtual machine.
+use std::mem;
 
 use crate::error::{Error, Result};
 use crate::expr::{Closure, Expr, UpValue};
 use crate::handle::Handle;
 use crate::opcode::{Op, UpValueOrigin};
-use std::mem;
+
+use scheme_gc::GcHeap;
 
 pub fn eval(closure: Handle<Closure>) -> Result<Expr> {
     let mut vm = Vm::new();
@@ -34,6 +36,9 @@ struct Vm {
 
     /// The call stack.
     frames: Vec<CallFrame>,
+
+    /// Managed memory heap.
+    heap: GcHeap,
 }
 
 struct CallFrame {
@@ -71,6 +76,7 @@ impl Vm {
         Self {
             operand: Vec::new(),
             frames: Vec::new(),
+            heap: GcHeap::new(),
         }
     }
 
