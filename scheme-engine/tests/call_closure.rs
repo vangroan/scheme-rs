@@ -8,7 +8,7 @@ fn test_call_closure() {
     let program = scheme_engine::compile(env.clone(), &expr).unwrap();
 
     // Run program to define variables.
-    scheme_engine::eval(program).expect("evaluating top-level fibonacci program");
+    scheme_engine::eval(program.closure().clone()).expect("evaluating top-level fibonacci program");
 
     println!(
         "fib -> {:?}",

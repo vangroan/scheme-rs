@@ -1,14 +1,113 @@
-use std::cell::RefCell;
-use std::fmt;
-use std::fmt::Formatter;
+use std::cell::{Ref, RefCell};
 use std::rc::Rc;
 
 use smol_str::SmolStr;
 
-use crate::env::{Env, LocalId};
+use crate::env::Env;
 use crate::error::Result;
 use crate::handle::{Handle, RcWeak};
 use crate::opcode::Op;
+use crate::ExprRepr;
+
+/// Shorthand utilities.
+pub mod utils {
+    use super::*;
+
+    pub fn nil() -> Expr {
+        Expr::Nil
+    }
+
+    pub fn cons(car: impl Into<Expr>, cdr: impl Into<Expr>) -> Expr {
+        Expr::Pair(Handle::new(Pair(car.into(), cdr.into())))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Pair(pub(crate) Expr, pub(crate) Expr);
+
+impl Pair {
+    pub const fn new(car: Expr, cdr: Expr) -> Self {
+        Pair(car, cdr)
+    }
+
+    #[inline]
+    pub fn to_expr(self) -> Expr {
+        Expr::Pair(Handle::new(self))
+    }
+
+    pub const fn split_first(&self) -> (&Expr, &Expr) {
+        (&self.0, &self.1)
+    }
+
+    pub const fn left(&self) -> &Expr {
+        &self.0
+    }
+
+    pub const fn right(&self) -> &Expr {
+        &self.1
+    }
+
+    #[inline(always)]
+    pub fn set_left(&mut self, value: Expr) {
+        self.0 = value;
+    }
+
+    #[inline(always)]
+    pub fn set_right(&mut self, value: Expr) {
+        self.1 = value;
+    }
+
+    /// Copy the contents of the given slice into a new correctly formed list.
+    pub fn new_list(elements: &[Expr]) -> Option<Pair> {
+        elements.split_first().map(|(first, rest)| {
+            let head = first.clone();
+            let tail: Expr = Pair::new_list(rest)
+                .map(|pair| Expr::Pair(Handle::new(pair)))
+                .unwrap_or(Expr::Nil);
+            Pair(head, tail)
+        })
+    }
+
+    /// Create a new well-formed list by taking ownership of the given elements.
+    pub fn new_list_vec(mut elements: Vec<Expr>) -> Option<Pair> {
+        // It's more performant to pop elements off the back of a vector.
+        elements.reverse();
+        Pair::new_list_vec_recursive(elements.pop(), elements)
+    }
+
+    fn new_list_vec_recursive(
+        maybe_head: Option<Expr>,
+        mut rest_reversed: Vec<Expr>,
+    ) -> Option<Pair> {
+        maybe_head.map(|head| {
+            Pair(
+                head,
+                Pair::new_list_vec_recursive(rest_reversed.pop(), rest_reversed)
+                    .map(Pair::to_expr)
+                    .unwrap_or(Expr::Nil),
+            )
+        })
+    }
+
+    /// Recursively checks if the pair is a valid list.
+    ///
+    /// # Warning
+    ///
+    /// This does not protect against circular references.
+    pub(crate) fn is_list(expr: &Expr) -> bool {
+        match expr {
+            Expr::Pair(pair_handle) => {
+                let pair = pair_handle.borrow();
+                let rest = pair.right();
+                match rest {
+                    Expr::Nil => true,
+                    _ => Pair::is_list(rest),
+                }
+            }
+            _ => false,
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum Expr {
@@ -21,13 +120,18 @@ pub enum Expr {
     /// ```scheme
     /// '()
     /// ```
+    ///
+    /// Nil also represents an empty list. Any code that expects a [`Pair`]
+    /// must be prepared to accept a [`Nil`] as well. Nil is used as the
+    /// sentinel of the [`Pair`] linked list, and is required for a chain
+    /// of pairs to be considered a well-formed list.
     Nil,
-    /// Returned by special forms or procedures that only have side-effects,
+    /// Returned by special forms or procedures that only have side effects,
     /// but don't evaluate to values.
     ///
     /// Examples are `define`, `display` and `newline`.
     ///
-    /// Also the value of a variable that was declared, but never defined.
+    /// Also, the value of a variable that was declared, but never defined.
     Void,
     Bool(bool),
     Number(f64),
@@ -36,17 +140,23 @@ pub enum Expr {
     Keyword(Keyword),
     Quote(Box<Expr>),
     // TODO: List must be a linked list
+    #[deprecated]
     List(Vec<Expr>),
     // TODO: Handle of tuples, or tuple of handles?
-    Pair(Handle<(Expr, Expr)>),
+    Pair(Handle<Pair>),
     Vector(Vec<Expr>),
     Sequence(Vec<Expr>),
+    SequenceV2(Handle<Pair>),
     Procedure(Rc<Proc>),
     Closure(Handle<Closure>),
     NativeFunc(NativeFunc),
 }
 
 impl Expr {
+    pub fn is_nil(&self) -> bool {
+        matches!(self, Expr::Nil)
+    }
+
     pub fn is_boolean(&self) -> bool {
         matches!(self, Expr::Bool(_))
     }
@@ -70,11 +180,46 @@ impl Expr {
         }
     }
 
+    pub fn new_ident(ident: impl AsRef<str>) -> Expr {
+        Expr::Ident(SmolStr::new(ident))
+    }
+
     pub fn as_ident(&self) -> Option<&str> {
         match self {
             Expr::Ident(name) => Some(name.as_str()),
             _ => None,
         }
+    }
+
+    #[inline(always)]
+    pub fn new_pair(left: Expr, right: Expr) -> Expr {
+        Expr::Pair(Handle::new(Pair(left, right)))
+    }
+
+    pub fn as_pair(&self) -> Ref<Pair> {
+        match self {
+            Expr::Pair(pair_handle) => pair_handle.borrow(),
+            _ => panic!("expression is not a pair"),
+        }
+    }
+
+    pub fn into_pair(self) -> Pair {
+        match self {
+            Expr::Pair(pair_handle) => pair_handle.into_inner(),
+            _ => panic!("expression is not a pair"),
+        }
+    }
+
+    pub fn try_pair(&self) -> Option<Ref<Pair>> {
+        match self {
+            Expr::Pair(pair_handle) => Some(pair_handle.borrow()),
+            _ => None,
+        }
+    }
+
+    #[inline]
+    pub fn is_pair(&self) -> bool {
+        matches!(self, Expr::Pair(_))
     }
 
     pub fn as_sequence(&self) -> Option<&[Expr]> {
@@ -94,7 +239,7 @@ impl Expr {
 
     #[inline]
     pub fn repr(&self) -> ExprRepr {
-        ExprRepr { expr: self }
+        ExprRepr::new(self)
     }
 }
 
@@ -123,69 +268,10 @@ impl PartialEq<Expr> for Expr {
     }
 }
 
-pub struct ExprRepr<'a> {
-    expr: &'a Expr,
-}
-
-impl<'a> ExprRepr<'a> {
-    fn fmt_expressions(&self, f: &mut fmt::Formatter, expressions: &[Expr]) -> fmt::Result {
-        write!(f, "(")?;
-        for (idx, expr) in expressions.iter().enumerate() {
-            if idx != 0 {
-                write!(f, " ")?;
-            }
-            let repr = ExprRepr { expr };
-            write!(f, "{repr}")?;
-        }
-        write!(f, ")")?;
-        Ok(())
-    }
-}
-
-impl<'a> fmt::Display for ExprRepr<'a> {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        match self.expr {
-            Expr::Nil => write!(f, "'()"),
-            Expr::Void => write!(f, "#!void"),
-            Expr::Bool(boolean) => {
-                if *boolean {
-                    write!(f, "#t")
-                } else {
-                    write!(f, "#f")
-                }
-            }
-            Expr::Number(number) => write!(f, "{number}"),
-            Expr::String(string) => write!(f, "{string}"),
-            Expr::Ident(name) => write!(f, "{name}"),
-            Expr::Keyword(keyword) => match keyword {
-                Keyword::Dot => write!(f, "."),
-            },
-            Expr::List(list) => {
-                self.fmt_expressions(f, list)?;
-                Ok(())
-            }
-            Expr::Sequence(expressions) => {
-                self.fmt_expressions(f, expressions)?;
-                Ok(())
-            }
-            Expr::Procedure(procedure) => {
-                write!(f, "<procedure {:?}>", Rc::as_ptr(procedure))
-            }
-            Expr::Closure(closure) => {
-                write!(
-                    f,
-                    "<procedure {:?}>",
-                    Rc::as_ptr(&closure.borrow().procedure_rc())
-                )
-            }
-            Expr::NativeFunc(func) => {
-                //  TODO!("keep Rust function name")
-                write!(f, "<native-function>")
-            }
-            unsupported_type => {
-                todo!("expression type repr not implemented yet: {unsupported_type:?}")
-            }
-        }
+impl From<f64> for Expr {
+    #[inline(always)]
+    fn from(value: f64) -> Self {
+        Expr::Number(value)
     }
 }
 
@@ -247,6 +333,8 @@ impl Signature {
 }
 
 impl Proc {
+    // TODO: The procedure definition must keep a weak reference to its lexical environment.
+
     /// Bytecode instructions for this procedure.
     #[inline]
     pub fn bytecode(&self) -> &[Op] {

@@ -19,13 +19,21 @@ impl<T> Handle<T> {
         }
     }
 
+    pub fn into_inner(self) -> T {
+        let Self { rc } = self;
+        match Rc::try_unwrap(rc) {
+            Err(_) => panic!("handle is not unique"),
+            Ok(ref_cell) => ref_cell.into_inner(),
+        }
+    }
+
     #[inline(always)]
     pub fn borrow(&self) -> Ref<'_, T> {
         self.rc.borrow()
     }
 
     #[inline(always)]
-    pub fn borrow_mut(&mut self) -> RefMut<'_, T> {
+    pub fn borrow_mut(&self) -> RefMut<'_, T> {
         self.rc.borrow_mut()
     }
 
@@ -50,5 +58,41 @@ impl<T> Clone for Handle<T> {
 impl<T: fmt::Debug> fmt::Debug for Handle<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_tuple("Handle").field(&*self.rc.borrow()).finish()
+    }
+}
+
+/// A [`Handle`] shared in a circular reference.
+pub enum Shared<T> {
+    Strong(Handle<T>),
+    Weak(RcWeak<RefCell<T>>),
+}
+
+impl<T> Shared<T> {
+    pub fn strong(&self) -> Option<&Handle<T>> {
+        match self {
+            Shared::Strong(handle) => Some(handle),
+            Shared::Weak(_) => None,
+        }
+    }
+
+    pub fn upgrade(&self) -> Option<Handle<T>> {
+        match self {
+            Shared::Strong(handle) => Some(handle.clone()),
+            Shared::Weak(weak) => weak.upgrade().map(|rc| Handle { rc }),
+        }
+    }
+
+    pub fn weak(&self) -> Option<&RcWeak<RefCell<T>>> {
+        match self {
+            Shared::Strong(_) => None,
+            Shared::Weak(weak) => Some(weak),
+        }
+    }
+
+    pub fn downgrade(&self) -> RcWeak<RefCell<T>> {
+        match self {
+            Shared::Strong(handle) => handle.downgrade(),
+            Shared::Weak(weak) => weak.clone(),
+        }
     }
 }

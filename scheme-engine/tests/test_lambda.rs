@@ -9,10 +9,9 @@ fn test_lambda_call() {
 
     let env = scheme_engine::new_env().expect("create core environment");
     let expr = scheme_engine::parse(source, true).expect("parse");
-    let closure = scheme_engine::compile(env.clone(), &expr).expect("compile");
-    println!("Top-level Closure: {closure:?}");
+    let program = scheme_engine::compile(env.clone(), &expr).expect("compile");
 
-    let value = scheme_engine::eval(closure).expect("evaluation");
+    let value = scheme_engine::eval(program.closure().clone()).expect("evaluation");
     assert_eq!(value, Expr::Number(14.0));
 
     assert_eq!(

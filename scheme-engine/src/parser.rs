@@ -1,13 +1,18 @@
 //! Parser.
 
+use crate::expr::{Expr};
 use crate::ext::*;
 use crate::{
     error::{Error, Result},
-    expr::Expr,
     lexer::Lexer,
     token::{Token, TokenKind},
 };
 
+/// Parse the given text as Scheme code.
+///
+/// When the `is_sequence` flag is true the text is treated as
+/// a top-level program, a sequence of expressions. When it's
+/// false the text is treated as a single expression.
 pub fn parse(source: &str, is_sequence: bool) -> Result<Expr> {
     let mut lexer = Lexer::new(source);
 
@@ -20,6 +25,110 @@ pub fn parse(source: &str, is_sequence: bool) -> Result<Expr> {
     } else {
         parse_expr(&mut lexer)
     }
+}
+
+pub fn parse_v2(source: &str) -> Result<Expr> {
+    let mut lexer = Lexer::new(source);
+
+    // Position the lexer so the current token points to the first token.
+    lexer.next_token();
+
+    parse_sequence_pair(&mut lexer)
+}
+
+fn parse_sequence_pair(lexer: &mut Lexer) -> Result<Expr> {
+    println!("parse_sequence_pair({:?})", lexer.rest());
+
+    let mut head = Expr::Nil;
+    let mut tail = Expr::Nil;
+
+    while let Some(token) = lexer.current_token() {
+        if token.kind == TokenKind::EOF {
+            break;
+        }
+
+        let expr = parse_expr_v2(lexer)?;
+
+        // Push right
+        match tail {
+            Expr::Nil => {
+                tail = Expr::new_pair(expr, Expr::Nil);
+            }
+            Expr::Pair(pair) => {
+                tail = Expr::new_pair(expr, Expr::Nil);
+                pair.borrow_mut().set_right(tail.clone());
+            }
+            _ => panic!("list tail must be a pair or nil"),
+        }
+
+        if head.is_nil() {
+            head = tail.clone();
+        }
+    }
+
+    Ok(head)
+}
+
+fn parse_expr_v2(lexer: &mut Lexer) -> Result<Expr> {
+    println!("parse_expr_v2({:?})", lexer.rest());
+
+    let token = lexer
+        .current_token()
+        .cloned()
+        .ok_or_else(|| Error::Reason("unexpected end".to_string()))?;
+    lexer.next_token();
+
+    match token.kind {
+        TokenKind::LeftParen => parse_list_v2(lexer),
+        TokenKind::EOF => Err(Error::Reason("unexpected end-of-file".to_string())),
+        TokenKind::RightParen => Err(Error::Reason("unexpected right parentheses".to_string())),
+        TokenKind::QuoteMark => parse_quote(lexer),
+        _ => {
+            let fragment = token.fragment(lexer.source());
+            parse_atom(token.clone(), fragment)
+        }
+    }
+}
+
+fn parse_list_v2(lexer: &mut Lexer) -> Result<Expr> {
+    println!("parse_list_v2({:?})", lexer.rest());
+
+    let mut head = Expr::Nil;
+    let mut tail = Expr::Nil;
+
+    while let Some(token) = lexer.current_token() {
+        match token.kind {
+            // Closes list.
+            TokenKind::RightParen => {
+                lexer.next_token();
+                break;
+            }
+            TokenKind::EOF => {
+                return Err(Error::Reason("unexpected end-of-file".to_string()));
+            }
+            _ => {
+                let expr = parse_expr(lexer)?;
+
+                // Push right
+                match tail {
+                    Expr::Nil => {
+                        tail = Expr::new_pair(expr, Expr::Nil);
+                    }
+                    Expr::Pair(pair) => {
+                        tail = Expr::new_pair(expr, Expr::Nil);
+                        pair.borrow_mut().set_right(tail.clone());
+                    }
+                    _ => panic!("list tail must be a pair or nil"),
+                }
+
+                if head.is_nil() {
+                    head = tail.clone();
+                }
+            }
+        }
+    }
+
+    Ok(head)
 }
 
 fn parse_sequence(lexer: &mut Lexer) -> Result<Expr> {
@@ -45,7 +154,7 @@ fn parse_expr(lexer: &mut Lexer) -> Result<Expr> {
     let token = lexer
         .current_token()
         .cloned()
-        .ok_or_else(|| Error::Reason(format!("unexpected end")))?;
+        .ok_or_else(|| Error::Reason("unexpected end".to_string()))?;
     lexer.next_token();
 
     match token.kind {
