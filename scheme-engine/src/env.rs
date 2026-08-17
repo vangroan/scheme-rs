@@ -1,10 +1,10 @@
 //! Execution environment.
 use std::rc::Rc;
 
-use crate::declare_id;
 use crate::error::{Error, Result};
 use crate::expr::{Expr, NativeFunc, Proc};
 use crate::symbol::{SymbolId, SymbolTable};
+use crate::{declare_id, Handle};
 
 declare_id!(
     /// Constant value identifier.
@@ -38,6 +38,9 @@ declare_id!(
 );
 
 pub struct Env {
+    /// Parent environment.
+    parent: Option<Handle<Env>>,
+
     /// Table of values which do not change during runtime.
     ///
     /// Includes literals like booleans, numbers and strings, but
@@ -58,6 +61,19 @@ impl Env {
     /// Create a new empty environment.
     pub fn new() -> Self {
         Env {
+            parent: None,
+            constants: (),
+
+            variables: SymbolTable::new(),
+            var_values: Vec::new(),
+
+            procedures: Vec::new(),
+        }
+    }
+
+    pub fn with_parent(parent: Handle<Env>) -> Self {
+        Env {
+            parent: Some(parent),
             constants: (),
 
             variables: SymbolTable::new(),
@@ -113,6 +129,12 @@ impl Env {
             }
             None => Err(Error::Reason(format!("variable already bound {name:?}"))),
         }
+    }
+}
+
+impl Default for Env {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
