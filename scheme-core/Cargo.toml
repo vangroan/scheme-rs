@@ -1,0 +1,7 @@
+[package]
+name = "scheme-core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+scheme-gc = { path = "../scheme-gc" }

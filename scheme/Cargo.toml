@@ -17,4 +17,6 @@ codegen-units = 1
 debug = true
 
 [dependencies]
+clap = "4.6"
 scheme-engine = { path = "../scheme-engine" }
+scheme-core = { path = "../scheme-core" }
