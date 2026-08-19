@@ -1,7 +1,7 @@
 use std::cell::Cell;
 
+use scheme_gc::cell::GcRefCell;
 use scheme_gc::prelude::*;
-use scheme_gc::GcRefCell;
 
 thread_local! {
     static DROP_COUNT: Cell<u32> = Cell::new(0);
