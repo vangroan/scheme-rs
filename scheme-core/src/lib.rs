@@ -24,7 +24,7 @@ pub use self::store::Store;
 /// Supports a visibility modifier.
 ///
 /// ```
-/// # use scheme_engine::declare_id;
+/// # use scheme_core::declare_id;
 /// declare_id!(pub(crate) struct LocalId(u8));
 /// declare_id!(pub struct TypeId(u64));
 /// # let id = LocalId::new(42);
