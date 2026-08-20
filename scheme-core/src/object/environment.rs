@@ -2,8 +2,6 @@
 
 use scheme_gc::prelude::*;
 
-use crate::object::object::HeapObject;
-
 pub struct Env {}
 
 impl Env {
@@ -11,8 +9,6 @@ impl Env {
         Self {}
     }
 }
-
-impl HeapObject for Env {}
 
 impl Trace for Env {
     fn trace(&self, tracer: &mut Tracer) {}
